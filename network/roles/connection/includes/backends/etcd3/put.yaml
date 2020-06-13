@@ -1,0 +1,7 @@
+---
+- name: write state tracking to etcd3
+  etcd3:
+    key: "/connections/{{ connection_id }}"
+    value: "{{ connection_state | to_json }}"
+    host: "{{ lookup('env', 'ETCD3_ADDR') }}"
+    state: present

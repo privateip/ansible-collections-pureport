@@ -1,0 +1,4 @@
+---
+- include_role:
+    name: pureport.network.google_cloud_interconnect
+    tasks_from: absent.yaml

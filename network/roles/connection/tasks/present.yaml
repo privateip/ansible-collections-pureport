@@ -1,0 +1,27 @@
+---
+- assert:
+    that:
+      - speed is defined
+      - region is defined
+    quiet: yes
+    fail_msg: "one or more required values is missing"
+
+- name: set network_id value
+  set_fact:
+    network_id: "{{ network | default(omit) | hash('sha1') }}"
+
+- name: set connection_id value
+  set_fact:
+    connection_id: "{{ [type, region, speed, network_id] | join(':') | hash('sha1') }}"
+
+- name: include connection type specific tasks
+  include_tasks:
+    file: "{{ role_path }}/includes/connections/{{ type }}/present.yaml"
+
+- include_tasks:
+    file: "{{ role_path }}/includes/backends/{{ state_tracking_backend }}/put.yaml"
+  vars:
+    connection_id: "{{ connection_state.pureport_connection.id | hash('sha1') }}"
+  when:
+    - state_tracking
+    - connection_state is defined

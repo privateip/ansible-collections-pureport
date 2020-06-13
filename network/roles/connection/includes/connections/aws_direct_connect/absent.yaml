@@ -1,0 +1,53 @@
+---
+- ec2_vpc_vgw:
+    name: "{{ aws_vpc_vgw_name }}"
+    region: "{{ connection_data.region }}"
+    state: absent
+  register: aws_vgw
+  delay: 30
+  until: aws_vgw is not failed
+  retries: 10
+  when: connection_data.aws_create_vpc is True
+
+- name: remove aws direct connect virtual interface(s)
+  aws_direct_connect_virtual_interface:
+    connection_id: "{{ item.connection_id }}"
+    virtual_interface_id: "{{ item.virtual_interface_id }}"
+    region: "{{ connection_data.region }}"
+    state: absent
+  loop: "{{ connection_data.aws_virtual_interfaces.results }}"
+
+- aws_direct_connect_connection:
+    connection_id: "{{ item }}"
+    region: "{{ connection_data.region }}"
+    state: absent
+  register: aws_dcg
+  delay: 30
+  until: aws_dcg is not failed
+  retries: 20
+  with_items:
+    - "{{ connection_data.pureport_connection.primary_gateway.remote_id }}"
+    - "{{ connection_data.pureport_connection.secondary_gateway.remote_id }}"
+
+- aws_direct_connect_gateway:
+    name: "{{ connection_data.aws_dcg.direct_connect_gateway_name }}"
+    direct_connect_gateway_id: "{{ connection_data.aws_dcg.direct_connect_gateway_id }}"
+    region: "{{ connection_data.region }}"
+    state: absent
+
+- ec2_vpc_net:
+    name: "{{ aws_vpc_name }}"
+    region: "{{ connection_data.region }}"
+    cidr_block: "{{ aws_vpc_cidr_block }}"
+    state: absent
+  when: connection_data.aws_create_vpc is True
+
+- pureport.fabric.aws_direct_connect_connection:
+    id: "{{ connection_data.pureport_connection.id }}"
+    network_href: "{{ connection_data.pureport_connection.network.href }}"
+    location_href: "{{ connection_data.pureport_connection.location.href }}"
+    speed: "{{ connection_data.speed }}"
+    #aws_account_id: "{{ aws_account_id }}"
+    aws_region: "{{ connection_data.region }}"
+    wait_for_server: true
+    state: absent

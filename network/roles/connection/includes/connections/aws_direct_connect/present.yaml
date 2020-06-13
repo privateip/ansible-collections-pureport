@@ -1,0 +1,22 @@
+---
+- include_role:
+    name: pureport.network.aws_direct_connect
+    tasks_from: present.yaml
+  vars:
+    aws_region: "{{ region }}"
+    aws_vpc_name: "vpc-{{ network_id[0:6] }}"
+    aws_vgw_name: "vgw-{{ network_id[0:6] }}"
+    aws_dcg_name: "dcg-{{ connection_id[0:6] }}"
+    aws_vif_name: "vif-{{ connection_id[0:6] }}"
+    pureport_network_name: "network-{{ network_id[0:6] }}"
+    pureport_connection_name: "conn-{{ connection_id[0:6] }}"
+    pureport_connection_speed: "{{ speed }}"
+
+- set_fact:
+    connection_state:
+      aws_region: "{{ region }}"
+      aws_vpc: "{{ aws_vpc | default({}) }}"
+      aws_virtual_gateway: "{{ aws_virtual_gateway | default({}) }}"
+      aws_direct_connect_gateway: "{{ aws_direct_connect_gateway }}"
+      aws_virtual_interfaces: "{{ aws_virtual_interfaces }}"
+      pureport_connection: "{{ pureport_connection }}"

@@ -1,0 +1,22 @@
+---
+- include_role:
+    name: pureport.network.azure_express_route
+    tasks_from: present.yaml
+  vars:
+    azure_location: "{{ region }}"
+    azure_rg_name: "rg-{{ network_id[0:6] }}"
+    azure_vnet_name: "vnet-{{ network_id[0:6] }}"
+    azure_circuit_name: "circuit-{{ connection_id[0:6] }}"
+    pureport_network_name: "network-{{ network_id[0:6] }}"
+    pureport_connection_name: "conn-{{ connection_id[0:6] }}"
+    pureport_connection_speed: "{{ speed }}"
+
+- set_fact:
+    connection_state:
+      azure_location: "{{ region  }}"
+      azure_rg: "{{ azure_resource_group }}"
+      azure_virtual_network: "{{ azure_virtual_network }}"
+      azure_express_route_circuit: "{{ azure_express_route_circuit }}"
+      azure_express_route_peering: "{{ azure_express_route_peering }}"
+      pureport_network: "{{ pureport_network }}"
+      pureport_connection: "{{ pureport_connection }}"

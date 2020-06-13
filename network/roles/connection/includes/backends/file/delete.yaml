@@ -1,0 +1,9 @@
+---
+- name: set state_tracking_file value
+  set_fact:
+    state_tracking_file: "{{ '~/.pureport/connections/' + connection_id + '.json' | expanduser }}"
+
+- name: delete state tracking file from disk
+  file:
+    path: "{{ state_tracking_file }}"
+    state: absent
