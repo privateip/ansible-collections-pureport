@@ -1,7 +1,12 @@
 ---
+- set_fact:
+    azure_api_version: "2018-11-01"
+    azure_api_prefix: "/subscriptions/{{ lookup('env', 'AZURE_SUBSCRIPTION_ID') }}/resourceGroups/{{ azure_resource_group.state.name }}/providers/Microsoft.Network"
+    azure_circuit_name: "{{ azure_express_route_circuit.response.name }}"
+
 - name: check if the azure express route circuit peering configuration exists
   azure_rm_resource:
-    url: "{{ azure_api_prefix }}/expressRouteCircuits/{{ azure_circuit_name }}/peerings/{{ azure_express_route_peering.response.name }}"
+    url: "{{ azure_api_prefix }}/expressRouteCircuits/{{ azure_circuit_name }}/peerings/AzurePrivatePeering"
     api_version: "{{ azure_api_version }}"
     idempotency: true
     method: GET
@@ -73,14 +78,7 @@
       ignore_errors: true
   when: azure_circuit_check_results is succeeded
 
-# https://docs.ansible.com/ansible/latest/modules/azure_rm_virtualnetwork_module.html#azure-rm-virtualnetwork-module
-- name: remove the azure virtual network
-  azure_rm_virtualnetwork:
-    name: "{{ azure_virtual_network.state.name }}"
-    resource_group: "{{ azure_resource_group.state.name }}"
-    location: "{{ azure_virtual_network.state.location }}"
-    state: absent
-
+# FIXME: only remove the resource group if we created it
 # https://docs.ansible.com/ansible/latest/modules/azure_rm_resourcegroup_module.html
 - name: remove the azure resource group
   azure_rm_resourcegroup:
