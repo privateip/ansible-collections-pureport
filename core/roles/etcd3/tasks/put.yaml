@@ -1,0 +1,5 @@
+---
+- pureport.network.etcd3:
+    key: "{{ key }}"
+    value: "{{ value | to_json }}"
+    state: present

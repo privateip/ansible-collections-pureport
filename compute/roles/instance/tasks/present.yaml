@@ -1,0 +1,22 @@
+---
+- assert:
+    that:
+      - provider is defined
+      - region is defined
+    quiet: yes
+    fail_msg: "one or more required values is missing"
+
+- name: set instance_id value
+  set_fact:
+    network_id: "{{ instance | default(omit) | hash('sha1') }}"
+  when: instance_id is undefined
+
+- name: include instance type specific tasks
+  include_tasks:
+    file: "{{ role_path }}/includes/instances/{{ type }}/present.yaml"
+
+- include_tasks:
+    file: "{{ role_path }}/includes/backends/{{ state_tracking_backend }}/put.yaml"
+  when:
+    - state_tracking
+    - instance_state is defined

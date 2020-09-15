@@ -1,0 +1,74 @@
+---
+- fail:
+    msg: "missing required value for `aws_region`"
+  when: aws_region is undefined
+
+- name: get the current resource
+  amazon.aws.ec2_vpc_net_info:
+    region: "{{ aws_region }}"
+    filters:
+      "tag:Name": "{{ network_name }}"
+  register: configured_vpcs
+
+- fail:
+    msg: "`{{ network_name }}` does not exist in region `{{ aws_region }}`"
+  when: configured_vpcs.vpcs == []
+
+- set_fact:
+    key: "/networks/aws/{{ configured_vpcs.vpcs.0.id | hash('sha1') }}"
+
+- include_role:
+    name: pureport.common.store
+    tasks_from: get
+
+- name: get the current vpc virtual gateway (if configured)
+  community.aws.ec2_vpc_vgw_info:
+    region: "{{ aws_region }}"
+    vpn_gateway_ids: "{{ aws_vpc_vgw.vgw.id }}"
+  register: this
+  when: "'skipped' not in aws_vpc_vgw"
+
+- set_fact:
+    vgw_tag: "{{ this.virtual_gateways.0.tags |
+                  selectattr('key', 'eq', 'Name') |
+                  list |
+                  first }}"
+  when:
+    - "'skipped' not in aws_vpc_vgw"
+    - this.virtual_gateways.0.state != 'deleted'
+
+- name: remove the aws vpc virtual gateway
+  community.aws.ec2_vpc_vgw:
+    name: "{{ vgw_tag.value }}"
+    region: "{{ aws_region }}"
+    state: absent
+  register: aws_vgw_result
+  delay: 30
+  until: aws_vgw_result is not failed
+  retries: 10
+  when:
+    - "'skipped' not in aws_vpc_vgw"
+    - this.virtual_gateways.0.state != 'deleted'
+
+- name: remove aws vpc subnet
+  amazon.aws.ec2_vpc_subnet:
+    vpc_id: "{{ item.subnet.vpc_id }}"
+    region: "{{ aws_region }}"
+    cidr: "{{ item.subnet.cidr_block }}"
+    state: absent
+  with_items: "{{ aws_vpc_subnets.results }}"
+
+- name: remove aws vpc
+  amazon.aws.ec2_vpc_net:
+    name: "{{ network_name }}"
+    region: "{{ aws_region }}"
+    cidr_block: "{{ configured_vpcs.vpcs.0.cidr_block }}"
+    state: absent
+  register: result
+  delay: 30
+  until: result is not failed
+  retries: 10
+
+- include_role:
+    name: pureport.common.store
+    tasks_from: delete

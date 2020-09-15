@@ -1,0 +1,13 @@
+---
+- include_role:
+    name: pureport.network.pureport_ipsec_vpn
+    tasks_from: present.yaml
+  vars:
+    pureport_network_name: "network-{{ fabric_id[0:6] }}"
+    pureport_connection_name: "conn-{{ connection_id[0:6] }}"
+    pureport_connection_speed: "{{ speed }}"
+
+- set_fact:
+    connection_state:
+      pureport_network: "{{ pureport_network }}"
+      pureport_connection: "{{ pureport_connection }}"

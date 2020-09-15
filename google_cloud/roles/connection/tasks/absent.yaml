@@ -66,3 +66,7 @@
     account_href: "/accounts/{{ lookup('env', 'PUREPORT_ACCOUNT_ID') }}"
     state: absent
   when: pureport_connections.connections == []
+
+- include_role:
+    name: pureport.network.file
+    tasks_from: delete

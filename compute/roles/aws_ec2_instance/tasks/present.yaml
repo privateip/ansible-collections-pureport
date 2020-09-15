@@ -1,0 +1,37 @@
+---
+- name: create aws key pair
+  ec2_key:
+    name: "{{ aws_ec2_key_pair_name }}"
+    region: "{{ aws_region }}"
+    key_material: "{{ lookup('file', ssh_public_key_file | default('~/.ssh/id_rsa.pub')) }}"
+  register: aws_key_pair
+
+- name: create aws security group
+  ec2_group:
+    name: "{{ aws_ec2_security_group_name }}"
+    description: permit ssh and icmp
+    region: "{{ aws_region }}"
+    vpc_id: "{{ aws_vpc.vpc.id | default(omit) }}"
+    rules:
+      - proto: tcp
+        from_port: 22
+        to_port: 22
+        cidr_ip: 0.0.0.0/0
+      - proto: icmp
+        from_port: 8
+        to_port: 0
+        cidr_ip: 10.0.0.0/8
+  register: aws_security_group
+
+- name: create aws ec2 instance
+  ec2_instance:
+    name: "{{ aws_ec2_instance_name }}"
+    region: "{{ aws_region }}"
+    image_id: "{{ aws_ec2_instance_image_id }}"
+    instance_type: "{{ aws_ec2_instance_type }}"
+    security_groups: ["{{ aws_security_group.group_id }}"]
+    key_name: "{{ aws_key_pair.key.name }}"
+    vpc_subnet_id: "{{ aws_vpc_subnet.subnet.id | default(omit) }}"
+    network:
+      assign_public_ip: "{{ aws_ec2_instance_assign_public_ip }}"
+  register: aws_instance

@@ -1,0 +1,32 @@
+---
+- set_fact:
+    key: "/networks/azure/{{ network_name | hash('sha1') }}"
+
+- include_role:
+    name: pureport.common.store
+    tasks_from: get
+
+- name: delete the azure virtual network
+  azure.azcollection.azure_rm_virtualnetwork:
+    name: "{{ azure_vnet.state.name }}"
+    resource_group: "{{ azure_resource_group.state.name }}"
+    location: "{{ azure_resource_group.state.location }}"
+    state: absent
+  register: azure_virtual_network
+
+- name: get the azure resource group
+  azure.azcollection.azure_rm_resourcegroup_info:
+    name: "{{ azure_resource_group.state.name }}"
+    list_resources: yes
+  register: results
+
+- name: remove the azure resource group (if empty)
+  azure.azcollection.azure_rm_resourcegroup:
+    name: "{{ azure_resource_group.state.name }}"
+    location: "{{ azure_resource_group.state.location }}"
+    state: absent
+  when: results.resourcegroups.0.resources == []
+
+- include_role:
+    name: pureport.common.store
+    tasks_from: delete

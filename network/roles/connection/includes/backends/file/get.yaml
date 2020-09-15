@@ -1,0 +1,15 @@
+---
+- name: set state_tracking_file value
+  set_fact:
+    state_tracking_file: "{{ '~/.pureport/connections/' + connection_id + '.json' | expanduser }}"
+
+- name: check if connection tracking file exists
+  stat:
+    path: "{{ state_tracking_file }}"
+  register: state_tracking_file_stat
+
+- meta: end_play
+  when: not state_tracking_file_stat.stat.exists
+
+- include_vars:
+    file: "{{ state_tracking_file }}"

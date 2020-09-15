@@ -1,0 +1,10 @@
+---
+id: "{{ omit | hash('sha1') }}"
+
+network_name: "vpc-{{ id[0:6] }}"
+state: present
+
+azure_resource_group_name: "resource-group-{{ id[0:6] }}"
+
+azure_vnet_cidrs:
+  - 10.0.0.0/16

@@ -1,0 +1,25 @@
+---
+- name: get all pureport connections for account id
+  pureport.fabric.connections_info:
+    account_href: "/accounts/{{ lookup('env', 'PUREPORT_ACCOUNT_ID') }}"
+  register: pureport_connections
+
+- name: select connection based on name
+  set_fact:
+    pureport_connection: "{{ pureport_connections.connections |
+                             selectattr('name', 'eq', connection_name) |
+                             list |
+                             first }}"
+
+- name: set the connection_id value
+  set_fact:
+    connection_id: "{{ pureport_connection.id | hash('sha1') }}"
+
+- include_tasks:
+    file: "{{ role_path }}/includes/backends/{{ state_tracking_backend }}/get.yaml"
+
+- include_tasks:
+    file: "{{ role_path }}/includes/connections/{{ pureport_connection.type.lower() }}/{{ state }}.yaml"
+
+- include_tasks:
+    file: "{{ role_path }}/includes/backends/{{ state_tracking_backend }}/delete.yaml"

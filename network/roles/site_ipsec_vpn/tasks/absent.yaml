@@ -1,0 +1,21 @@
+---
+- name: remove site vpn gateway
+  pureport.fabric.google_cloud_interconnect_connection:
+    name: "{{ pureport_connection.name }}"
+    network_href: "{{ pureport_connection.network.href }}"
+    location_href: "{{ pureport_connection.location.href }}"
+    speed: "{{ pureport_connection.speed }}"
+    wait_for_server: True
+    state: absent
+
+- name: get all connections for pureport network
+  pureport.fabric.connections_info:
+    network_href: "{{ pureport_connection.network.href }}"
+  register: pureport_connections
+
+- name: remove pureport network (if not connections remain)
+  pureport.fabric.network:
+    name: "{{ pureport_connection.network.title }}"
+    account_href: "/accounts/{{ lookup('env', 'PUREPORT_ACCOUNT_ID') }}"
+    state: absent
+  when: pureport_connections.connections == []

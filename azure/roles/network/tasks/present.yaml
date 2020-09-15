@@ -1,0 +1,37 @@
+---
+- set_fact:
+    azure_regions:
+      - eastus2
+      - centralus
+      - westcentralus
+      - westus2
+      - soutcentralus
+      - northcentralus
+      - westus
+      - eastus
+
+- name: create the azure resource group
+  azure.azcollection.azure_rm_resourcegroup:
+    name: "{{ azure_resource_group_name }}"
+    location: "{{ azure_location }}"
+  register: azure_resource_group
+
+# https://docs.ansible.com/ansible/latest/modules/azure_rm_virtualnetwork_module.html#azure-rm-virtualnetwork-module
+- name: create the azure virtual network
+  azure.azcollection.azure_rm_virtualnetwork:
+    name: "{{ network_name }}"
+    resource_group: "{{ azure_resource_group.state.name }}"
+    address_prefixes_cidr: "{{ azure_vnet_cidrs }}"
+  register: azure_vnet
+
+- set_fact:
+    vpc_id: "{{ azure_vnet.state.id | hash('sha1') }}"
+
+- import_role:
+    name: pureport.common.store
+    tasks_from: put
+  vars:
+    key: "/networks/azure/{{ azure_vnet.state.name | hash('sha1') }}"
+    value:
+      azure_resource_group: "{{ azure_resource_group }}"
+      azure_vnet: "{{ azure_vnet }}"

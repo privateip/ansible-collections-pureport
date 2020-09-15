@@ -1,0 +1,22 @@
+---
+- name: delete google cloud compute instance
+  gcp_compute_instance:
+    name: "{{ gcp_compute.name }}"
+    project: "{{ lookup('env', 'GCP_PROJECT') }}"
+    zone: "{{ gcp_compute.zone.split('/')[-1] }}"
+    state: absent
+
+- name: delete google cloud compute disk
+  gcp_compute_disk:
+    name: "{{ gcp_disk.name }}"
+    project: "{{ lookup('env', 'GCP_PROJECT') }}"
+    zone: "{{ gcp_disk.zone.split('/')[-1] }}"
+    state: absent
+
+- name: delete google cloud public ip address
+  gcp_compute_address:
+    name: "{{ gcp_address.name }}"
+    project: "{{ lookup('env', 'GCP_PROJECT') }}"
+    region: "{{ gcp_address.region.split('/')[-1] }}"
+    state: absent
+  when: "'name' in gcp_address"

@@ -1,0 +1,58 @@
+---
+- fail:
+    msg: "missing required value for gcp_network_name"
+  when: gcp_network_name is undefined
+
+- name: get the google cloud network
+  google.cloud.gcp_compute_network_info:
+    project: "{{ gcp_project }}"
+    filters:
+      - "name = {{ gcp_network_name }}"
+  register: gcp_network
+
+- fail:
+    msg: "`{{ gcp_network_name }}` does not exist"
+  when: gcp_network.resources == []
+
+- name: generate unique id
+  set_fact:
+    id: "{{ gcp_network_name | hash }}"
+
+- name: generate google cloud router name
+  set_fact:
+    gcp_router_name: "{{ router-id[0:6] }}"
+  when: gcp_router_name  == omit
+
+- name: create google cloud router
+  google.cloud.gcp_compute_router:
+    name: "{{ gcp_router_name }}"
+    project: "{{ gcp_project }}"
+    region: "{{ gcp_region }}"
+    network: { selfLink: "{{ gcp_network.resources.0.selfLink }}" }
+    bgp: { asn: 16550 }
+  register: gcp_router
+
+- name: generate google cloud interconnect atttachment name
+  set_fact:
+    gcp_attachment_name: "vlan-{{ id[0:6] }}"
+  when: gcp_attachment_name == omit
+
+#
+# The value for edge_availability_domain should be set when this role
+# is called.
+#
+# Valid values for edge_availability_domain are:
+#   * AVAILABILITY_DOMAIN_ANY (default)
+#   * AVAILABILITY_DOMAIN_1
+#   * AVAILABILITY_DOMAIN_2
+#
+- name: create google cloud interconnect attachment
+  google.cloud.gcp_compute_interconnect_attachment:
+    name: "{{ gcp_attachment_name }}"
+    project: "{{ gcp_project }}"
+    region: "{{ gcp_region }}"
+    router: { selfLink: "{{ item.selfLink }}" }
+    type: PARTNER
+    admin_enabled: true
+    edge_availability_domain: "{{ gcp_attachment_availability_domain | default(omit) }}"
+  register: gcp_attachment

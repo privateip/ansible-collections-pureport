@@ -1,0 +1,14 @@
+---
+state: present
+
+id: "{{ omit | hash('sha1') }}"
+
+gcp_assign_public_ip: True
+
+gcp_compute_instance_name: "vm-{{ id[0:6] }}"
+gcp_compute_instance_type: f1-micro
+
+gcp_compute_disk_name: "{{ gcp_compute_instance_name }}-disk"
+gcp_compute_disk_size: 50
+
+gcp_compute_address_name: "{{ gcp_compute_instance_name }}-ip"

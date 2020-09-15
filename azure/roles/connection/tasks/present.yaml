@@ -1,0 +1,93 @@
+---
+- set_fact:
+    id: "{{ fabric | default('default') | hash('sha1') }}"
+
+- set_fact:
+    pureport_connection_region_map:
+      chicago: ["/locations/us-chi", "Chicago", "northcentralus"]
+      dallas: ["/locations/us-dal", "Dallas", "southcentralus"]
+      seattle: ["/locations/us-sea", "Seattle", "westus2"]
+      silicon_valley: ["/locations/us-sjc", "Silicon Valley", "westus"]
+      washington_dc: ["/locations/us-wdc", "Washington DC", "eastus"]
+
+- name: create the azure resource manager group
+  azure_rm_resourcegroup:
+    name: "{{ azure_resource_group_name }}"
+    location: "{{ pureport_connection_region_map[azure_location.replace(' ', '_').lower()].2 }}"
+  register: azure_resource_group
+
+# https://docs.microsoft.com/en-us/rest/api/expressroute/expressroutecircuits/createorupdate
+- name: create the azure express route circuit
+  azure_rm_resource:
+    url: "{{ azure_api_prefix }}/expressRouteCircuits/{{ azure_circuit_name }}"
+    api_version: "{{ azure_api_version }}"
+    idempotency: true
+    body:
+      location: "{{ azure_resource_group.state.location }}"
+      sku:
+        name: Standard_MeteredData
+        tier: Standard
+        family: MeteredData
+      properties:
+        serviceProviderProperties:
+          serviceProviderName: Equinix
+          peeringLocation: "{{ pureport_connection_region_map[azure_location.replace(' ', '_').lower()].1 }}"
+          bandwidthInMbps: "{{ pureport_connection_speed }}"
+  register: azure_express_route_circuit
+
+- name: wait until the azure express route circuit has been provisioned
+  azure_rm_resource:
+    url: "{{ azure_api_prefix }}/expressRouteCircuits/{{ azure_circuit_name }}"
+    api_version: "{{ azure_api_version }}"
+    method: GET
+  register: azure_express_route
+  until: azure_express_route.response.properties.serviceKey != '00000000-0000-0000-0000-000000000000'
+  retries: 30
+  delay: 10
+
+- name: create the pureport network
+  pureport.fabric.network:
+    name: "{{ pureport_network_name }}"
+    description: "{{ pureport_network_description | default(omit) }}"
+    account_href: "/accounts/{{ lookup('env', 'PUREPORT_ACCOUNT_ID') }}"
+  register: pureport_network
+
+- name: create the azure connection to the pureport network
+  pureport.fabric.azure_express_route_connection:
+    name: "{{ pureport_connection_name }}"
+    network_href: "{{ pureport_network.href }}"
+    location_href: "{{ pureport_connection_region_map[azure_location.replace(' ', '_').lower()].0 }}"
+    speed: "{{ pureport_connection_speed }}"
+    high_availability: true
+    billing_term: HOURLY
+    service_key: "{{ azure_express_route.response.properties.serviceKey }}"
+    wait_for_server: true
+  register: pureport_connection
+
+# https://docs.microsoft.com/en-us/rest/api/expressroute/expressroutecircuitpeerings/createorupdate
+- name: update the azure express route circuit peering configuration
+  azure_rm_resource:
+    url: "{{ azure_api_prefix }}/expressRouteCircuits/{{ azure_circuit_name }}/peerings/AzurePrivatePeering"
+    api_version: "{{ azure_api_version }}"
+    idempotency: true
+    body:
+      properties:
+        peeringType: AzurePrivatePeering
+        peerASN: "{{ pureport_connection.primary_gateway.bgp_config.pureport_asn }}"
+        primaryPeerAddressPrefix: "{{ pureport_connection.primary_gateway.bgp_config.peering_subnet }}"
+        secondaryPeerAddressPrefix: "{{ pureport_connection.secondary_gateway.bgp_config.peering_subnet }}"
+        vlanId: "{{ pureport_connection.primary_gateway.vlan }}"
+        sharedKey: "{{ pureport_connection.primary_gateway.bgp_config.password }}"
+  register: azure_express_route_peering
+
+- import_role:
+    name: pureport.network.file
+    tasks_from: put
+  vars:
+    key: "/connections/pureport/{{ pureport_connection.id }}"
+    value:
+      azure_resource_group: "{{ azure_resource_group }}"
+      azure_express_route_circuit: "{{ azure_express_route_circuit }}"
+      azure_express_route_peering: "{{ azure_express_route_peering }}"
+      pureport_network: "{{ pureport_network }}"
+      pureport_connection: "{{ pureport_conenction }}"

@@ -1,0 +1,4 @@
+---
+- include_role:
+    name: pureport.network.azure_express_route
+    tasks_from: absent.yaml

@@ -1,0 +1,63 @@
+---
+- name: create google cloud network
+  google.cloud.gcp_compute_network:
+    name: "{{ network_name }}"
+    auto_create_subnetworks: "{{ gcp_network_auto_create_subnets }}"
+    routing_config: { routing_mode: "{{ gcp_network_routing_mode }}" }
+    project: "{{ gcp_project }}"
+  register: gcp_network
+
+- name: create google cloud subnets
+  google.cloud.gcp_compute_subnetwork:
+    name: "{{ item.name | default(gcp_network.name) }}"
+    network: { selfLink: "{{ gcp_network.selfLink }}" }
+    region: "{{ item.region }}"
+    ip_cidr_range: "{{ item.cidr_block }}"
+    project: "{{ gcp_project }}"
+  with_items: "{{ gcp_vpc_subnets }}"
+  register: gcp_network_subnets
+
+- name: manage gcp firewall rule allow ssh
+  google.cloud.gcp_compute_firewall:
+    name: "{{ gcp_network.name }}-allow-ssh"
+    source_ranges: "{{ gcp_firewall_ssh_source_ranges | default(omit) }}"
+    allowed:
+      - ip_protocol: tcp
+        ports: [ "22" ]
+    network: { selfLink: "{{ gcp_network.selfLink }}" }
+    project: "{{ gcp_project }}"
+    state: "{{ gcp_firewall_allow_ssh | ternary('present', 'absent') }}"
+  register: gcp_firewall_rule_allow_ssh
+
+- name: manage gcp firewall rule allow icmp
+  google.cloud.gcp_compute_firewall:
+    name: "{{ gcp_network.name }}-allow-icmp"
+    source_ranges: "{{ gpc_firewall_icmp_source_ranges | default(omit) }}"
+    allowed:
+      - ip_protocol: icmp
+    network: { selfLink: "{{ gcp_network.selfLink }}" }
+    project: "{{ gcp_project }}"
+    state: "{{ gcp_firewall_allow_icmp | ternary('present', 'absent') }}"
+  register: gcp_firewall_rule_allow_icmp
+
+- name: create google cloud vpc firewall rules
+  gcp_compute_firewall:
+    name: "{{ item.name }}"
+    allowed: "{{ item.allowed }}"
+    source_ranges: "{{ item.source_ranges | default(omit) }}"
+    network: { selfLink: "{{ gcp_network.selfLink }}" }
+    project: "{{ gcp_project }}"
+  loop: "{{ gcp_vpc_firewall_rules }}"
+  register: gcp_firewall_rules
+
+- import_role:
+    name: pureport.core.store
+    tasks_from: put
+  vars:
+    key: "/networks/gcp/{{ gcp_network.id | hash('sha1') }}"
+    value:
+      gcp_network: "{{ gcp_network }}"
+      gcp_network_subnets: "{{ gcp_network_subnets }}"
+      gcp_firewall_rule_allow_ssh: "{{ gcp_firewall_rule_allow_ssh }}"
+      gcp_firewall_rule_allow_icmp: "{{ gcp_firewall_rule_allow_icmp }}"
+      gcp_firewall_rules: "{{ gcp_firewall_rules }}"

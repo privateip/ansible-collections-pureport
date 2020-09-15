@@ -1,0 +1,23 @@
+---
+- assert:
+    that:
+      - gcp_region is defined
+      - gcp_network_name is defined
+    fail_msg: "one or more required values is missing or invalid"
+    quiet: yes
+
+- include_role:
+    name: pureport.network.google_cloud_interconnect
+    tasks_from: present
+  vars:
+    gcp_router_name: "router-{{ connection_id[0:6] }}"
+    gcp_interconnect_name: "vlan-{{ connection_id[0:6] }}"
+
+- set_fact:
+    connection_state:
+      gcp_network: "{{ gcp_network }}"
+      gcp_subnetwork: "{{ gcp_subnetwork }}"
+      gcp_routers: "{{ gcp_routers }}"
+      gcp_attachments: "{{ gcp_attachments }}"
+      pureport_network: "{{ pureport_network }}"
+      pureport_connection: "{{ pureport_connection }}"

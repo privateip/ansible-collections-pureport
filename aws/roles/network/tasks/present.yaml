@@ -1,0 +1,52 @@
+---
+- fail:
+    msg: "missing required value for `aws_region`"
+  when: aws_region is undefined
+
+- name: create aws virtual private cloud
+  amazon.aws.ec2_vpc_net:
+    name: "{{ network_name }}"
+    region: "{{ aws_region }}"
+    cidr_block: "{{ aws_vpc_cidr_block }}"
+  register: aws_vpc
+
+- set_fact:
+    vpc_id: "{{ aws_vpc.vpc.id | hash('sha1') }}"
+
+- name: create aws vpc subnet
+  amazon.aws.ec2_vpc_subnet:
+    vpc_id: "{{ aws_vpc.vpc.id }}"
+    region: "{{ aws_region }}"
+    cidr: "{{ item }}"
+  with_items: "{{ aws_subnets | default([]) }}"
+  register: aws_vpc_subnets
+
+- name: create aws virtual private gateway
+  community.aws.ec2_vpc_vgw:
+    name: "vgw-{{ vpc_id[0:6] }}"
+    region: "{{ aws_region }}"
+    vpc_id: "{{ aws_vpc.vpc.id }}"
+  register: aws_vpc_vgw
+  when: aws_vpc_vgw_enabled == True
+
+    #- set_fact:
+    #    aws_vpc_route_table_vgw_ids: [ "{{ aws_vgw.vgw.id | default(omit) }}" ]
+    #  when: aws_vpc_vgw_enabled == True
+    #
+    #- name: create aws vpc route table
+    #  community.aws.ec2_vpc_route_table:
+    #    vpc_id: "{{ aws_vpc.vpc.id }}"
+    #    region: "{{ aws_region }}"
+    #    propagating_vgw_ids: "{{ aws_vpc_route_table_vgw_ids | default(omit) }}"
+    #    subnets: [ "{{ aws_vpc_subnet.subnet.id }}" ]
+    #  register: aws_vpc_route_table
+    #  when: aws_vpc_vgw_enabled == True
+
+- import_role:
+    name: pureport.common.store
+    tasks_from: put
+  vars:
+    key: "/networks/aws/{{ vpc_id }}"
+    value:
+      aws_vpc_subnets: "{{ aws_vpc_subnets }}"
+      aws_vpc_vgw: "{{ aws_vpc_vgw }}"

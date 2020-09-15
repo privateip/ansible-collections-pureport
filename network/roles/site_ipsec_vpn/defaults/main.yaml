@@ -1,0 +1,15 @@
+---
+state: present
+
+id: "{{ omit | hash('sha1') }}"
+
+pureport_network_name: "network-{{ id[0:6] }}"
+
+pureport_connection_name: "conn-{{ id[0:6] }}"
+pureport_connection_high_availability: true
+
+# valid values include
+#   - ROUTE_BASED_BGP
+#   - ROUTE_BASED_STATIC
+#   - POLICY_BASED
+pureport_connection_routing_type: ROUTE_BASED_BGP

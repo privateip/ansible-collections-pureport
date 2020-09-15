@@ -1,0 +1,116 @@
+---
+- set_fact:
+    id: "{{ fabric | default('default') | hash('sha1') }}"
+
+- set_fact:
+    pureport_connection_map:
+      us-west-1: "/locations/us-sjc"
+      us-west-2: "/locations/us-sea"
+      us-east-1: "/locations/us-wdc"
+      us-east-2: "/locations/us-chi"
+
+- name: checking the value for connection_speed is valid
+  assert:
+    that:
+      - connection_speed | int in [50, 100, 200, 300, 400, 500, 1000, 2000, 5000, 10000]
+    fail_msg: "invalid speed for this connection type"
+    quiet: yes
+
+- assert:
+    that:
+      - connection_region.lower() in pureport_connection_map.keys()
+    fail_msg: "invalid aws region"
+    quiet: yes
+
+- block:
+    - name: get the aws vpc virtual gateway
+      community.aws.ec2_vpc_vgw_info:
+        region: "{{ connection_region }}"
+        filters:
+          "tag:Name": "{{ vgw_name }}"
+      register: aws_vgw_info
+
+    - set_fact:
+        aws_vgw_id: "{{ aws_vgw_info.virtualgateways.0.vpn_gateway_id }}"
+  when: vgw_name is defined
+
+- set_fact:
+    aws_vgw_id: "{{ aws_vpc_vgw.vgw.id }}"
+  when:
+    - aws_vpc_vgw is defined
+    - aws_vgw_id is undefined
+
+- name: create aws direct connect gateway
+  community.aws.aws_direct_connect_gateway:
+    name: "dcg-{{ id[0:6] }}"
+    region: "{{ connection_region }}"
+    amazon_asn: "64512"
+    virtual_gateway_id: "{{ aws_vgw_id | default(omit) }}"
+  register: aws_direct_connect_gateway
+
+- name: create pureport network
+  pureport.fabric.network:
+    name: "network-{{ id[0:6] }}"
+    description: "{{ pureport_network_description | default(omit) }}"
+    account_href: "/accounts/{{ lookup('env', 'PUREPORT_ACCOUNT_ID') }}"
+  register: pureport_network
+
+- set_fact:
+    connection_id: "{{ aws_direct_connect_gateway.direct_connect_gateway_id | hash('sha1') }}"
+
+- name: create aws connection to pureport network
+  pureport.fabric.aws_direct_connect_connection:
+    name: "conn-{{ connection_id[0:6] }}"
+    network_href: "{{ pureport_network.href }}"
+    location_href: "{{ pureport_connection_map[connection_region] }}"
+    speed: "{{ connection_speed }}"
+    high_availability: true
+    billing_term: HOURLY
+    aws_account_id: "{{ lookup('env', 'AWS_ACCOUNT_ID') }}"
+    connection_region: "{{ connection_region }}"
+    wait_for_server: "{{ pureport_connection_wait_for_server | default(omit) }}"
+  register: pureport_connection
+
+- name: set value for 'pureport_gateways' fact
+  set_fact:
+    pureport_gateways: "{{ [pureport_connection.primary_gateway, pureport_connection.secondary_gateway] | select('defined') | list }}"
+
+- name: confirm aws direct connect connections
+  pureport.aws.direct_connect_confirm_connection:
+    connection_id: "{{ item.remote_id }}"
+    region: "{{ connection_region }}"
+  loop: "{{ pureport_gateways }}"
+
+- name: create aws direct connect virtual interfaces
+  pureport.aws.direct_connect_virtual_interface:
+    name: "vif-{{ id[0:6] }}-{{ index + 1 }}"
+    region: "{{ connection_region }}"
+    direct_connect_gateway_id: "{{ aws_direct_connect_gateway.direct_connect_gateway_id }}"
+    id_to_associate: "{{ item.remote_id }}"
+    public: false
+    vlan: "{{ item.vlan }}"
+    bgp_asn: "{{ item.bgp_config.pureport_asn }}"
+    customer_address: "{{ item.bgp_config.pureport_ip }}"
+    amazon_address: "{{ item.bgp_config.customer_ip }}"
+    authentication_key: "{{ item.bgp_config.password }}"
+    state: present
+  loop: "{{ pureport_gateways }}"
+  loop_control:
+    index_var: index
+  delay: 30
+  until: aws_virtual_interfaces is not failed
+  retries: 10  # For some reason this seems to fail the first few times, but eventually works...
+  register: aws_virtual_interfaces
+
+- import_role:
+    name: pureport.network.file
+    tasks_from: put
+  vars:
+    key: "/connections/pureport/{{ pureport_connection.id }}"
+    value:
+      connection_region: "{{ connection_region }}"
+      aws_vgw_id: "{{ aws_vgw_id | default(omit) }}"
+      aws_direct_connect_gateway: "{{ aws_direct_connect_gateway }}"
+      aws_virtual_interfaces: "{{ aws_virtual_interfaces }}"
+      pureport_network: "{{ pureport_network }}"
+      pureport_connection: "{{ pureport_connection }}"

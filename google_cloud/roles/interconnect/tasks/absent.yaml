@@ -4,7 +4,7 @@
   when: connection_name is undefined
 
 - pureport.fabric.connections_info:
-    account_href: "/accounts/{{ lookup('env', 'PUREPORT_ACCOUNT_ID') }}"
+    account_href: "/accounts/{{ pureport_account_id }}"
   register: pureport_connections
 
 - set_fact:
@@ -17,13 +17,13 @@
     key: "/connections/pureport/{{ pureport_connection.id }}"
 
 - include_role:
-    name: pureport.network.file
+    name: pureport.common.store
     tasks_from: get
 
 - name: remove google cloud interconnect attachments
   google.cloud.gcp_compute_interconnect_attachment:
     name: "{{ item.name }}"
-    project: "{{ lookup('env', 'GCP_PROJECT') }}"
+    project: "{{ gcp_project }}"
     region: "{{ item.region.split('/')[-1] }}"
     router: { selfLink: "{{ item.router }}" }
     type: PARTNER
@@ -36,7 +36,7 @@
 - name: remove google cloud routers
   google.cloud.gcp_compute_router:
     name: "{{ item.name }}"
-    project: "{{ lookup('env', 'GCP_PROJECT') }}"
+    project: "{{ gcp_project }}"
     region: "{{ item.region.split('/')[-1] }}"
     network: { selfLink: "{{ item.network }}" }
     state: absent
@@ -63,6 +63,10 @@
 - name: remove pureport network (if no connections remain)
   pureport.fabric.network:
     name: "{{ pureport_connection.network.title }}"
-    account_href: "/accounts/{{ lookup('env', 'PUREPORT_ACCOUNT_ID') }}"
+    account_href: "/accounts/{{ pureport_account_id }}"
     state: absent
   when: pureport_connections.connections == []
+
+- include_role:
+    name: pureport.common.store
+    tasks_from: delete

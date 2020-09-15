@@ -1,0 +1,8 @@
+---
+- assert:
+    that:
+      - state.lower() in ['present', 'absent']
+    fail_msg: "state value must be one of `present`, `absent`, got `{{ state }}`"
+    quiet: yes
+
+- include_tasks: { file: "{{ state }}.yaml" }

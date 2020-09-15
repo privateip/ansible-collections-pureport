@@ -1,0 +1,42 @@
+---
+- name: create google cloud compute instance disk
+  gcp_compute_disk:
+    name: "{{ gcp_compute_disk_name }}"
+    project: "{{ lookup('env', 'GCP_PROJECT') }}"
+    zone: "{{ gcp_region }}-{{ gcp_zone }}"
+    size_gb: "{{ gcp_compute_disk_size }}"
+    source_image: 'projects/centos-cloud/global/images/family/centos-7'
+  register: gcp_disk
+
+- block:
+    - name: create a google cloud public ip address
+      gcp_compute_address:
+        name: "{{ gcp_compute_address_name }}"
+        project: "{{ lookup('env', 'GCP_PROJECT') }}"
+        region: "{{ gcp_region }}"
+      register: gcp_address
+
+    - name: set vm network interface configuration
+      set_fact:
+        network_interface_config:
+          - name: External NAT
+            nat_ip: "{{ gcp_address }}"
+            type: ONE_TO_ONE_NAT
+  when: gcp_assign_public_ip | bool  == True
+
+- name: create google compute vm instance
+  gcp_compute_instance:
+    name: "{{ gcp_compute_instance_name }}"
+    project: "{{ lookup('env', 'GCP_PROJECT') }}"
+    zone: "{{ gcp_region }}-{{ gcp_zone }}"
+    machine_type: "{{ gcp_compute_instance_type }}"
+    disks:
+      - auto_delete: true
+        boot: true
+        source: "{{ gcp_disk }}"
+    network_interfaces:
+      - access_configs: "{{ network_interface_config | default([]) }}"
+        network: "{{ gcp_network }}"
+    metadata:
+      ssh-keys: "{{ ssh_user | default(ansible_user) }}:{{ lookup('file', ssh_public_key_file | default('~/.ssh/id_rsa.pub')) }}"
+  register: gcp_compute

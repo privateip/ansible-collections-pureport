@@ -1,0 +1,114 @@
+---
+- name: create pureport_location_map fact
+  set_fact:
+    pureport_location_map:
+      us-west1: "/locations/us-sea"
+      us-west2: "/locations/us-sjc"
+      us-east1: "/locations/us-wdc"
+      us-east4: "/locations/us-wdc"
+      us-central1: "/locations/us-chi"
+
+- fail:
+    msg: "missing or invalid value for gcp_region"
+  when: gcp_region not in pureport_location_map.keys()
+
+- fail:
+    msg: "missing or invalid value for connection_speed"
+  when: connection_speed | int not in [50, 100, 200, 300, 400, 500, 1000, 5000, 10000]
+
+- name: get the google cloud network
+  google.cloud.gcp_compute_network_info:
+    project: "{{ gcp_project }}"
+    filters:
+      - "name = {{ gcp_network_name }}"
+  register: gcp_network
+
+- fail:
+    msg: "`{{ gcp_network_name }}` does not exist"
+  when: gcp_network.resources == []
+
+- set_fact:
+    id: "{{ [gcp_region, gcp_network_name, connection_speed] | to_json | hash }}"
+
+- name: generate google cloud router name
+  set_fact:
+    gcp_router_name: "router-{{ id[0:6] }}"
+  when: gcp_router_name is undefined
+
+- name: create google cloud router
+  google.cloud.gcp_compute_router:
+    name: "{{ gcp_router_name }}-{{ item }}"
+    project: "{{ gcp_project }}"
+    region: "{{ gcp_region }}"
+    network: { selfLink: "{{ gcp_network.resources.0.selfLink }}" }
+    bgp: { asn: 16550 }
+  with_sequence: start=1 count=2
+  register: gcp_routers
+
+- name: generate google cloud attachment name
+  set_fact:
+    gcp_attachment_name: "vlan-{{ id[0:6] }}"
+  when: gcp_attachment_name is undefined
+
+- name: create google cloud interconnect attachments
+  google.cloud.gcp_compute_interconnect_attachment:
+    name: "{{ gcp_attachment_name }}-{{ index + 1 }}"
+    project: "{{ gcp_project }}"
+    region: "{{ gcp_region }}"
+    router: { selfLink: "{{ item.selfLink }}" }
+    type: PARTNER
+    admin_enabled: true
+    edge_availability_domain: "AVAILABILITY_DOMAIN_{{ index + 1 }}"
+  loop: "{{ gcp_routers.results }}"
+  loop_control:
+    index_var: index
+  register: gcp_attachments
+
+- name: generate pureport network name
+  block:
+    - set_fact: { network_id: "{{ 'default' | hash('sha1') }}" }
+    - set_fact: { pureport_network_name: "network-{{ network_id[0:6] }}" }
+  when: pureport_network_name is undefined
+
+- name: create pureport network
+  pureport.fabric.network:
+    name: "{{ pureport_network_name }}"
+    description: "{{ pureport_network_description | default(omit) }}"
+    account_href: "/accounts/{{ pureport_account_id }}"
+  register: pureport_network
+
+- set_fact:
+    connection_id: "{{ gcp_routers.results.0.id }}"
+
+- name: generate name for the connection
+  set_fact:
+    connection_name: "conn-{{ id[0:6] }}"
+  when: connection_name is undefined
+
+- name: create connection from google cloud to pureport
+  pureport.fabric.google_cloud_interconnect_connection:
+    name: "{{ connection_name }}"
+    description: "{{ connection_description | default(omit) }}"
+    network_href: "{{ pureport_network.href }}"
+    location_href: "{{ pureport_location_map[gcp_region] }}"
+    speed: "{{ connection_speed }}"
+    high_availability: true
+    billing_term: HOURLY
+    primary_pairing_key: "{{ gcp_attachments.results.0.pairingKey }}"
+    secondary_pairing_key: "{{ gcp_attachments.results.1.pairingKey }}"
+    wait_for_server: "{{ pureport_connection_wait_for_server | default(True) }}"
+  register: pureport_connection
+
+- import_role:
+    name: pureport.core.store
+    tasks_from: put
+  vars:
+    key: "/connections/pureport/{{ pureport_connection.id }}"
+    value:
+      gcp_router_name: "{{ gcp_router_name }}"
+      gcp_attachment_name: "{{ gcp_attachment_name }}"
+      pureport_network_name: "{{ pureport_network_name }}"
+      gcp_routers: "{{ gcp_routers }}"
+      gcp_attachments: "{{ gcp_attachments }}"
+      pureport_network: "{{ pureport_network }}"
+      pureport_connection: "{{ pureport_connection }}"

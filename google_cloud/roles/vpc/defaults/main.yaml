@@ -1,0 +1,19 @@
+---
+id: "{{ omit | hash('sha1') }}"
+
+network_name: "vpc-{{ id[0:6] }}"
+state: present
+
+gcp_project: "{{ lookup('env', 'GCP_PROJECT') }}"
+
+gcp_network_auto_create_subnets: True
+gcp_network_routing_mode: REGIONAL
+
+gcp_vpc_subnets: []
+
+gcp_firewall_allow_ssh: False
+gcp_firewall_allow_icmp: False
+
+gcp_vpc_firewall_rules: []
+
+pureport_store_backend: file

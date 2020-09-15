@@ -1,0 +1,4 @@
+---
+- name: get the connection
+  pureport.network.etcd3:
+    key: "/connections/{{ connection_id }}"

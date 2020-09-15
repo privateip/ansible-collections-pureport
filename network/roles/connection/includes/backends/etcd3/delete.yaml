@@ -1,0 +1,5 @@
+---
+- name: delete connection from etcd3
+  pureport.network.etcd3:
+    key: "/connections/{{ connection_id }}"
+    state: absent

@@ -1,0 +1,35 @@
+---
+- assert:
+    that:
+      - connection_type is defined and connection_type.lower() in ['google_cloud_interconnect', 'aws_direct_connect', 'azure_express_route', 'site_ipsec_vpn']
+      - connection_speed is defined
+    quiet: yes
+    fail_msg: "one or more required values is missing or invalid"
+
+- name: set network_id value
+  set_fact:
+    id: "{{ network | default('default') | hash('sha1') }}"
+  when: id is undefined
+
+- name: set pureport_network_name value
+  set_fact:
+    pureport_network_name: "network-{{ id[0:6] }}"
+  when: pureport_network_name is undefined
+
+- name: set pureport_connection_name value
+  set_fact:
+    pureport_connection_name: "conn-{{ id[0:6] }}"
+  when: pureport_connection_name is undefined
+
+- name: include connection type specific tasks
+  include_tasks:
+    file: "{{ role_path }}/includes/{{ connection_type }}/present.yaml"
+
+- include_role:
+    name: pureport.common.store
+    tasks_from: put
+  vars:
+    key: "/connections/pureport/{{ pureport_connection.id | hash('sha1') }}"
+    key: null
+    value: "{{ connection_state }}"
+  when: connection_state is defined

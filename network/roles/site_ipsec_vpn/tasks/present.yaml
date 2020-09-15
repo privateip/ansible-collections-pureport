@@ -1,0 +1,58 @@
+---
+- name: create pureport_location_map fact
+  set_fact:
+    pureport_location_map:
+      seattle: "/locations/us-sea"
+      silicon_valley: "/locations/us-sjc"
+      washington_dc: "/locations/us-wdc"
+      dallas: "/locations/us-dal"
+      chicago: "/locations/us-chi"
+
+- assert:
+    that:
+      - pureport_location.lower() in pureport_location_map.keys()
+    fail_msg: "invalid location specified for this connection type"
+    quiet: yes
+
+- assert:
+    that:
+      - pureport_connection_speed | int in [50, 100, 200, 300, 400, 500, 1000, 10000]
+    fail_msg: "invalid connection speed specified for this connection type"
+    quiet: yes
+
+- name: create pureport network
+  pureport.fabric.network:
+    name: "{{ pureport_network_name }}"
+    description: "{{ pureport_network_description | default(omit) }}"
+    account_href: "/accounts/{{ lookup('env', 'PUREPORT_ACCOUNT_ID') }}"
+  register: pureport_network
+
+- name: create pureport ipsec vpn gateway
+  pureport.fabric.site_ipsec_vpn_connection:
+    name: "{{ pureport_connection_name }}"
+
+    network_href: "{{ pureport_network.href }}"
+    location_href: "{{ pureport_location_map[region.lower()] }}"
+
+    speed: "{{ pureport_connection_speed }}"
+    high_availability: "{{ pureport_connection_high_availability | bool }}"
+    billing_term: HOURLY
+
+    primary_customer_router_ip: "{{ pureport_connection_remote_ip }}"
+
+    routing_type: "{{ pureport_connection_routing_type }}"
+    customer_asn: "{{ pureport_connection_remote_asn }}"
+
+    ike_version: V2
+    ike_encryption: AES_128
+    ike_integrity: SHA256_HMAC
+    ike_dh_group: MODP_2048
+
+    esp_encryption: AES_128
+    esp_integrity: SHA256_HMAC
+    esp_dh_group: MODP_2048
+
+    wait_for_server: False
+    state: present
+
+  register: pureport_connection

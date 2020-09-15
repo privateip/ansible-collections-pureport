@@ -1,0 +1,4 @@
+---
+- file:
+    path: "~/.pureport/state/{{ key | hash('sha1') }}.json"
+    state: absent

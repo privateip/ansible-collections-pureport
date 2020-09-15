@@ -1,0 +1,3 @@
+---
+gcp_router_name: "{{ omit }}"
+gcp_attachment_name: "{{ omit }}"

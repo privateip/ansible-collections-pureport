@@ -1,0 +1,22 @@
+---
+state: present
+
+aws_images:
+  centos7:
+    us-east-1: "ami-0affd4508a5d2481b"
+    us-east-2: "ami-01e36b7901e884a10"
+    us-west-1: "ami-098f55b4287a885ba"
+    us-west-2: "ami-0bc06212a56393ee1"
+
+
+id: "{{ omit | hash('sha1') }}"
+
+aws_ec2_instance_name: "vm-{{ id[0:6] }}"
+aws_ec2_instance_type: t2.micro
+
+aws_ec2_instance_image_id: "{{ aws_images.centos7[aws_region] }}"
+
+aws_ec2_instance_assign_public_ip: False
+
+aws_ec2_key_pair_name: "{{ aws_ec2_instance_name }}-key"
+aws_ec2_security_group_name: "{{ aws_ec2_instance_name }}-sg"

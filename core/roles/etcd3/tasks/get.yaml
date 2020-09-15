@@ -1,0 +1,3 @@
+---
+- pureport.network.etcd3:
+    key: "{{ key }}"

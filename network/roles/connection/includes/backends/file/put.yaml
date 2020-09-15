@@ -1,0 +1,19 @@
+---
+- name: set state_tracking_filename value
+  set_fact:
+    state_tracking_filename: "{{ connection_id }}"
+
+- name: set state_tracking_file value
+  set_fact:
+    state_tracking_file: "{{ '~/.pureport/connections/' + state_tracking_filename +'.json' | expanduser }}"
+
+- name: ensure state tracking path exists
+  file:
+    path: "{{ state_tracking_file | dirname }}"
+    state: directory
+
+- name: write state tracking to file
+  copy:
+    content: "{{ connection_state | to_json }}"
+    dest: "{{ state_tracking_file }}"
+

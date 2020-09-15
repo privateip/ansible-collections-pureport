@@ -1,0 +1,67 @@
+---
+- name: get the current network configuration
+  google.cloud.gcp_compute_network_info:
+    project: "{{ gcp_project }}"
+    filters:
+      - "name = {{ network_name }}"
+  register: this
+
+- fail:
+    msg: "vpc `{{ network_name }}` does not exist"
+  when: this.resources == []
+
+- set_fact:
+    key: "/networks/gcp/{{ this.resources.0.id | hash('sha1') }}"
+
+- include_role:
+    name: pureport.core.store
+    tasks_from: get
+
+- name: remove google cloud vpc firewall rules
+  google.cloud.gcp_compute_firewall:
+    name: "{{ item.name }}"
+    allowed: "{{ item.allowed }}"
+    source_ranges: "{{ item.source_ranges | default(omit) }}"
+    network: { selfLink: "{{ gcp_network.selfLink }}" }
+    project: "{{ gcp_project }}"
+    state: absent
+  loop: "{{ gcp_firewall_rules.results }}"
+
+- name: remove gcp firewall rule allow ssh
+  google.cloud.gcp_compute_firewall:
+    name: "{{ gcp_firewall_rule_allow_ssh.name }}"
+    network: { selfLink: "{{ gcp_network.selfLink }}" }
+    project: "{{ gcp_project }}"
+    state: absent
+  when: gcp_firewall_rule_allow_ssh.get('id') != None
+
+- name: remove gcp firewall rule allow icmp
+  google.cloud.gcp_compute_firewall:
+    name: "{{ gcp_firewall_rule_allow_icmp.name }}"
+    source_ranges: "{{ gpc_firewall_icmp_source_ranges | default(omit) }}"
+    allowed:
+      - ip_protocol: icmp
+    network: { selfLink: "{{ gcp_network.selfLink }}" }
+    project: "{{ gcp_project }}"
+    state: absent
+  when: gcp_firewall_rule_allow_icmp.get('id') != None
+
+- name: remove google cloud subnetwork
+  google.cloud.gcp_compute_subnetwork:
+    name: "{{ item.name }}"
+    project: "{{ gcp_project }}"
+    region: "{{ item.region.split('/')[-1] }}"
+    network: { selfLink: "{{ gcp_network.selfLink }}" }
+    ip_cidr_range: "{{ item.ipCidrRange }}"
+    state: absent
+  with_items: "{{ gcp_network_subnets.results }}"
+
+- name: remove google cloud network
+  google.cloud.gcp_compute_network:
+    name: "{{ gcp_network.name }}"
+    project: "{{ gcp_project }}"
+    state: absent
+
+- include_role:
+    name: pureport.core.store
+    tasks_from: delete

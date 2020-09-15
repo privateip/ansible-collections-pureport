@@ -1,0 +1,10 @@
+---
+id: "{{ omit | hash('sha1') }}"
+
+network_name: "vpc-{{ id[0:6] }}"
+state: present
+
+aws_vpc_vgw_enabled: True
+aws_vpc_route_table_enabled: False
+
+aws_vpc_cidr_block: "10.0.0.0/16"

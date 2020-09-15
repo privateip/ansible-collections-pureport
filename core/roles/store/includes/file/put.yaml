@@ -1,0 +1,8 @@
+---
+- file:
+    path: "~/.pureport/state"
+    state: directory
+
+- copy:
+    content: "{{ value | to_json }}"
+    dest: "~/.pureport/state/{{ key | hash('sha1') }}.json"
